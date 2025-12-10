@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
-import connectMongo from "../_lib/mongoose.js";
-import ShortLink from "../_lib/models/ShortLink.js";
-import { verifyAuth } from "../_lib/auth.js";
+import connectMongo from "./_lib/mongoose.js";
+import ShortLink from "./_lib/models/ShortLink.js";
+import { verifyAuth } from "./_lib/auth.js";
 
 const isValidUrl = (urlString) => {
   try {
@@ -23,7 +23,20 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Debug: Check if MONGO_URI exists
+    if (!process.env.MONGO_URI) {
+      console.error("MONGO_URI is not defined in environment variables");
+      return res
+        .status(500)
+        .json({
+          message: "Database configuration error",
+          debug: "MONGO_URI missing",
+        });
+    }
+
+    console.log("Connecting to MongoDB...");
     await connectMongo();
+    console.log("Connected to MongoDB");
 
     // POST /api/shorten - Create short link
     if (req.method === "POST") {
@@ -68,7 +81,10 @@ export default async function handler(req, res) {
 
     return res.status(405).json({ message: "Method not allowed" });
   } catch (error) {
-    console.error("Shorten error:", error);
-    return res.status(500).json({ message: "Server error" });
+    console.error("Shorten error:", error.message, error.stack);
+    return res.status(500).json({
+      message: "Server error",
+      debug: error.message,
+    });
   }
 }
