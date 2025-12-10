@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import jwt from "jsonwebtoken";
 import { nanoid } from "nanoid";
 
 // MongoDB connection
@@ -27,6 +28,31 @@ const shortLinkSchema = new mongoose.Schema({
 
 const ShortLink =
   mongoose.models.ShortLink || mongoose.model("ShortLink", shortLinkSchema);
+
+// Parse cookies
+function parseCookies(cookieHeader) {
+  const cookies = {};
+  if (cookieHeader) {
+    cookieHeader.split(";").forEach((cookie) => {
+      const [name, value] = cookie.trim().split("=");
+      cookies[name] = value;
+    });
+  }
+  return cookies;
+}
+
+// Get user from token
+function getUserId(req) {
+  try {
+    const cookies = parseCookies(req.headers.cookie);
+    const token = cookies.token;
+    if (!token) return null;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    return decoded.userId;
+  } catch {
+    return null;
+  }
+}
 
 // Handler
 export default async function handler(req, res) {
@@ -62,12 +88,16 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: "Invalid URL format" });
     }
 
+    // Get owner if logged in
+    const owner = getUserId(req);
+
     // Generate unique shortId
     let shortId = nanoid(7);
 
     const shortLink = new ShortLink({
       shortId,
       originalUrl: url,
+      owner,
     });
     await shortLink.save();
 
