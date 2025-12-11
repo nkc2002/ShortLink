@@ -6,6 +6,7 @@ const shortLinkSchema = new mongoose.Schema({
     required: true,
     unique: true,
     trim: true,
+    index: true, // Index for fast lookups
   },
   originalUrl: {
     type: String,
@@ -16,6 +17,7 @@ const shortLinkSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
     default: null,
+    index: true, // Index for fast user queries
   },
   clicks: {
     type: Number,
@@ -28,8 +30,12 @@ const shortLinkSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now,
+    index: true, // Index for sorting by date
   },
 });
+
+// Compound index for common query pattern
+shortLinkSchema.index({ owner: 1, createdAt: -1 });
 
 export default mongoose.models.ShortLink ||
   mongoose.model("ShortLink", shortLinkSchema);

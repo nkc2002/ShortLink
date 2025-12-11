@@ -1,63 +1,28 @@
-import mongoose from "mongoose";
 import axios from "axios";
+import connectMongo from "../_lib/mongoose.js";
+import ShortLink from "../_lib/models/ShortLink.js";
+import ClickLog from "../_lib/models/ClickLog.js";
 
-// MongoDB connection
-let cached = global._mongoose || { conn: null, promise: null };
-global._mongoose = cached;
-
-async function connectMongo() {
-  if (cached.conn) return cached.conn;
-  if (!cached.promise) {
-    cached.promise = mongoose.connect(process.env.MONGO_URI, {
-      maxPoolSize: 5,
-    });
-  }
-  cached.conn = await cached.promise;
-  return cached.conn;
-}
-
-// ShortLink Schema
-const shortLinkSchema = new mongoose.Schema({
-  shortId: { type: String, required: true, unique: true },
-  originalUrl: { type: String, required: true },
-  owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
-  clicks: { type: Number, default: 0 },
-  createdAt: { type: Date, default: Date.now },
-});
-
-const ShortLink =
-  mongoose.models.ShortLink || mongoose.model("ShortLink", shortLinkSchema);
-
-// ClickLog Schema
-const clickLogSchema = new mongoose.Schema({
-  shortId: { type: String, required: true },
-  ip: { type: String },
-  userAgent: { type: String },
-  referer: { type: String },
-  at: { type: Date, default: Date.now },
-});
-
-const ClickLog =
-  mongoose.models.ClickLog || mongoose.model("ClickLog", clickLogSchema);
-
-// Send Telegram message
+// Send Telegram message (non-blocking)
 async function sendTelegram(text) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
 
   if (!botToken || !chatId) {
-    console.log("[Telegram] Not configured");
     return;
   }
 
   try {
-    await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      chat_id: chatId,
-      text,
-      parse_mode: "HTML",
-      disable_web_page_preview: true,
-    });
-    console.log("[Telegram] Message sent");
+    await axios.post(
+      `https://api.telegram.org/bot${botToken}/sendMessage`,
+      {
+        chat_id: chatId,
+        text,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+      },
+      { timeout: 5000 } // 5s timeout for telegram
+    );
   } catch (error) {
     console.error("[Telegram] Error:", error.message);
   }
@@ -90,7 +55,8 @@ export default async function handler(req, res) {
   try {
     await connectMongo();
 
-    const link = await ShortLink.findOne({ shortId });
+    // Use lean() for faster read-only query
+    const link = await ShortLink.findOne({ shortId }).lean();
 
     if (!link) {
       return res.status(404).json({ message: "Short link not found" });
@@ -100,10 +66,10 @@ export default async function handler(req, res) {
     const userAgent = req.headers["user-agent"] || "";
     const referer = req.headers["referer"] || "";
 
-    // Redirect immediately
+    // Redirect immediately (don't wait for background tasks)
     res.redirect(302, link.originalUrl);
 
-    // Background tasks
+    // Background tasks (fire and forget)
     const now = new Date().toLocaleString("vi-VN", {
       timeZone: "Asia/Ho_Chi_Minh",
     });

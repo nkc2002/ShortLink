@@ -1,33 +1,7 @@
-import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import { nanoid } from "nanoid";
-
-// MongoDB connection
-let cached = global._mongoose || { conn: null, promise: null };
-global._mongoose = cached;
-
-async function connectMongo() {
-  if (cached.conn) return cached.conn;
-  if (!cached.promise) {
-    cached.promise = mongoose.connect(process.env.MONGO_URI, {
-      maxPoolSize: 5,
-    });
-  }
-  cached.conn = await cached.promise;
-  return cached.conn;
-}
-
-// ShortLink Schema
-const shortLinkSchema = new mongoose.Schema({
-  shortId: { type: String, required: true, unique: true },
-  originalUrl: { type: String, required: true },
-  owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
-  clicks: { type: Number, default: 0 },
-  createdAt: { type: Date, default: Date.now },
-});
-
-const ShortLink =
-  mongoose.models.ShortLink || mongoose.model("ShortLink", shortLinkSchema);
+import connectMongo from "./_lib/mongoose.js";
+import ShortLink from "./_lib/models/ShortLink.js";
 
 // Parse cookies
 function parseCookies(cookieHeader) {
@@ -92,7 +66,7 @@ export default async function handler(req, res) {
     const owner = getUserId(req);
 
     // Generate unique shortId
-    let shortId = nanoid(7);
+    const shortId = nanoid(7);
 
     const shortLink = new ShortLink({
       shortId,

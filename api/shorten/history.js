@@ -1,32 +1,6 @@
-import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
-
-// MongoDB connection
-let cached = global._mongoose || { conn: null, promise: null };
-global._mongoose = cached;
-
-async function connectMongo() {
-  if (cached.conn) return cached.conn;
-  if (!cached.promise) {
-    cached.promise = mongoose.connect(process.env.MONGO_URI, {
-      maxPoolSize: 5,
-    });
-  }
-  cached.conn = await cached.promise;
-  return cached.conn;
-}
-
-// ShortLink Schema
-const shortLinkSchema = new mongoose.Schema({
-  shortId: { type: String, required: true, unique: true },
-  originalUrl: { type: String, required: true },
-  owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
-  clicks: { type: Number, default: 0 },
-  createdAt: { type: Date, default: Date.now },
-});
-
-const ShortLink =
-  mongoose.models.ShortLink || mongoose.model("ShortLink", shortLinkSchema);
+import connectMongo from "../_lib/mongoose.js";
+import ShortLink from "../_lib/models/ShortLink.js";
 
 // Parse cookies
 function parseCookies(cookieHeader) {
@@ -56,7 +30,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Verify token
+    // Verify token first (before DB connection for faster rejection)
     const cookies = parseCookies(req.headers.cookie);
     const token = cookies.token;
 
@@ -73,10 +47,11 @@ export default async function handler(req, res) {
 
     await connectMongo();
 
-    // Get user's links
+    // Get user's links using indexed query
     const links = await ShortLink.find({ owner: decoded.userId })
       .sort({ createdAt: -1 })
-      .limit(50);
+      .limit(50)
+      .lean(); // Use lean() for faster read-only queries
 
     const baseUrl = process.env.BASE_URL || `https://${req.headers.host}`;
 

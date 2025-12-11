@@ -1,30 +1,7 @@
-import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-
-// MongoDB connection
-let cached = global._mongoose || { conn: null, promise: null };
-global._mongoose = cached;
-
-async function connectMongo() {
-  if (cached.conn) return cached.conn;
-  if (!cached.promise) {
-    cached.promise = mongoose.connect(process.env.MONGO_URI, {
-      maxPoolSize: 5,
-    });
-  }
-  cached.conn = await cached.promise;
-  return cached.conn;
-}
-
-// User Schema
-const userSchema = new mongoose.Schema({
-  email: { type: String, required: true, unique: true, lowercase: true },
-  password: { type: String, required: true },
-  createdAt: { type: Date, default: Date.now },
-});
-
-const User = mongoose.models.User || mongoose.model("User", userSchema);
+import connectMongo from "../_lib/mongoose.js";
+import User from "../_lib/models/User.js";
 
 // Handler
 export default async function handler(req, res) {
@@ -42,10 +19,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    await connectMongo();
-
     const { email, password } = req.body;
 
+    // Validate input before connecting to DB (fail fast)
     if (!email || !password) {
       return res
         .status(400)
@@ -58,8 +34,12 @@ export default async function handler(req, res) {
         .json({ message: "Password must be at least 6 characters" });
     }
 
+    await connectMongo();
+
     // Check existing user
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    const existingUser = await User.findOne({
+      email: email.toLowerCase(),
+    }).lean();
     if (existingUser) {
       return res.status(400).json({ message: "Email already registered" });
     }
