@@ -3,12 +3,13 @@ import connectMongo from "../_lib/mongoose.js";
 import ShortLink from "../_lib/models/ShortLink.js";
 import ClickLog from "../_lib/models/ClickLog.js";
 
-// Send Telegram message (non-blocking)
+// Send Telegram message
 async function sendTelegram(text) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
 
   if (!botToken || !chatId) {
+    console.log("[Telegram] Not configured - missing BOT_TOKEN or CHAT_ID");
     return;
   }
 
@@ -21,8 +22,9 @@ async function sendTelegram(text) {
         parse_mode: "HTML",
         disable_web_page_preview: true,
       },
-      { timeout: 5000 } // 5s timeout for telegram
+      { timeout: 5000 }
     );
+    console.log("[Telegram] Message sent successfully");
   } catch (error) {
     console.error("[Telegram] Error:", error.message);
   }
@@ -65,16 +67,13 @@ export default async function handler(req, res) {
     const ip = getClientIp(req);
     const userAgent = req.headers["user-agent"] || "";
     const referer = req.headers["referer"] || "";
-
-    // Redirect immediately (don't wait for background tasks)
-    res.redirect(302, link.originalUrl);
-
-    // Background tasks (fire and forget)
     const now = new Date().toLocaleString("vi-VN", {
       timeZone: "Asia/Ho_Chi_Minh",
     });
 
-    Promise.all([
+    // Run all tasks in parallel BEFORE redirecting
+    // This ensures Telegram message is sent before function terminates
+    await Promise.all([
       ShortLink.updateOne({ _id: link._id }, { $inc: { clicks: 1 } }),
       ClickLog.create({ shortId, ip, userAgent, referer }),
       sendTelegram(
@@ -87,7 +86,10 @@ export default async function handler(req, res) {
           `📱 <b>Device:</b> ${parseUserAgent(userAgent)}\n` +
           `🕐 <b>Time:</b> ${now}`
       ),
-    ]).catch((err) => console.error("Background error:", err.message));
+    ]);
+
+    // Redirect after all background tasks complete
+    return res.redirect(302, link.originalUrl);
   } catch (error) {
     console.error("Redirect error:", error);
     return res.status(500).json({ message: "Server error" });
