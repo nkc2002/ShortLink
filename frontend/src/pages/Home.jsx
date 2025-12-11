@@ -67,7 +67,7 @@ function Home() {
           <button
             onClick={copyToClipboard}
             style={{
-              marginTop: "1rem",
+              marginTop: "0.75rem",
               padding: "0.5rem 1rem",
               background: copied ? "#22c55e" : "#6366f1",
               color: "white",
@@ -76,6 +76,12 @@ function Home() {
               cursor: "pointer",
               fontSize: "0.9rem",
               fontWeight: "500",
+              minWidth: "120px",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.25rem",
+              transition: "background 0.2s ease",
             }}
           >
             {copied ? "✓ Copied!" : "📋 Copy"}
